@@ -1,5 +1,5 @@
 import { createClient, type UsageRow } from "@appflare/cf-api";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ACCOUNT_DAY_PRODUCTS } from "./account-day";
 import {
   ACCOUNT_DAY_DATASETS,
@@ -20,6 +20,13 @@ import {
   RECORDED_IDS,
   RECORDED_NOW,
 } from "./collect-fixtures";
+
+// Keep the client's retention windows aligned with the recorded answers as real
+// time moves on. Restore only this spy so it cannot leak into another test file.
+beforeEach(() => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(RECORDED_NOW * 1000);
+  return () => clock.mockRestore();
+});
 
 const HOUR_NOW = Math.floor(RECORDED_NOW / HOUR) * HOUR; // 16:00 UTC
 
