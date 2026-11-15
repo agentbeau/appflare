@@ -120,11 +120,28 @@ describe("serveAuthorAvatar", () => {
     const elsewhere = setup(png, () => redirectTo("https://tracker.test/u/1"));
     expect((await serveAuthorAvatar(elsewhere.env, "MendyLanda", elsewhere)).status).toBe(502);
     expect(elsewhere.calls).toHaveLength(1);
-    const missing = setup(png, () => new Response("Not Found", { status: 404 }));
-    expect((await serveAuthorAvatar(missing.env, "MendyLanda", missing)).status).toBe(502);
     const again = setup(() => redirectTo(AVATAR));
     expect((await serveAuthorAvatar(again.env, "MendyLanda", again)).status).toBe(502);
     expect(again.calls).toHaveLength(2);
+  });
+
+  it("serves a short-cached local placeholder for a missing profile or avatar", async () => {
+    for (const missing of [
+      setup(png, () => new Response("Not Found", { status: 404 })),
+      setup(() => new Response("Not Found", { status: 404 })),
+    ]) {
+      const response = await serveAuthorAvatar(missing.env, "MendyLanda", missing);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/svg+xml");
+      expect(response.headers.get("cache-control")).toBe("private, max-age=300");
+      expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; sandbox");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+      expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+      const body = await response.text();
+      expect(body).toContain('<svg xmlns="http://www.w3.org/2000/svg"');
+      expect(body).not.toContain("MendyLanda");
+      expect(body).not.toContain("<script");
+    }
   });
 
   it("refuses non-images and oversized bodies", async () => {

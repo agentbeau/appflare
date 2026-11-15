@@ -27,6 +27,22 @@ function refuse(status: number, message: string): Response {
   return new Response(message, { status, headers: { "cache-control": "no-store" } });
 }
 
+/** A local, inert placeholder only for an absent GitHub author image. */
+function missingAvatar(): Response {
+  return new Response(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#e5e7eb"/><circle cx="32" cy="24" r="11" fill="#6b7280"/><path d="M12 58a20 20 0 0 1 40 0" fill="#6b7280"/></svg>',
+    {
+      headers: {
+        "content-type": "image/svg+xml",
+        "cache-control": "private, max-age=300",
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "default-src 'none'; sandbox",
+        "cross-origin-resource-policy": "same-origin",
+      },
+    },
+  );
+}
+
 export async function serveAuthorAvatar(
   env: CatalogEnv,
   handle: string,
@@ -47,12 +63,17 @@ export async function serveAuthorAvatar(
     // GitHub redirects a profile's avatar to its numeric id; only that one hop is followed.
     const profile = await get(avatarUpstreamUrl(handle));
     await profile.body?.cancel();
+    if (profile.status === 404) return missingAvatar();
     const target =
       profile.status === 302 ? avatarRedirectTarget(profile.headers.get("location")) : null;
     if (target === null) return refuse(502, `GitHub answered HTTP ${profile.status}.`);
     response = await get(target);
   } catch {
     return refuse(502, "GitHub could not be reached.");
+  }
+  if (response.status === 404) {
+    await response.body?.cancel();
+    return missingAvatar();
   }
   if (response.status !== 200) {
     await response.body?.cancel();
